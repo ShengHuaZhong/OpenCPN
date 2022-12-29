@@ -8303,7 +8303,7 @@ wxString GetOCPNKnownLanguage(wxString lang_canonical, wxString& lang_dir) {
 
   } else if ((lang_canonical == _T("cs_CZ")) || (lang_canonical == _T("cs"))) {
     dir_suffix = _T("cs");
-    return_string = wxString("ƒåe≈°tina", wxConvUTF8);
+    return_string = wxString("?e?tina", wxConvUTF8);
 
   } else if ((lang_canonical == _T("da_DK")) || (lang_canonical == _T("da"))) {
     dir_suffix = _T("da");
@@ -8319,11 +8319,11 @@ wxString GetOCPNKnownLanguage(wxString lang_canonical, wxString& lang_dir) {
 
   } else if ((lang_canonical == _T("es_ES")) || (lang_canonical == _T("es"))) {
     dir_suffix = _T("es");
-    return_string = wxString("Espa√±ol", wxConvUTF8);
+    return_string = wxString("Espa?ol", wxConvUTF8);
 
   } else if ((lang_canonical == _T("fr_FR")) || (lang_canonical == _T("fr"))) {
     dir_suffix = _T("fr");
-    return_string = wxString("Fran√ßais", wxConvUTF8);
+    return_string = wxString("Fran?ais", wxConvUTF8);
 
   } else if ((lang_canonical == _T("it_IT")) || (lang_canonical == _T("it"))) {
     dir_suffix = _T("it");
@@ -8339,15 +8339,15 @@ wxString GetOCPNKnownLanguage(wxString lang_canonical, wxString& lang_dir) {
 
   } else if ((lang_canonical == _T("pt_PT")) || (lang_canonical == _T("pt"))) {
     dir_suffix = _T("pt_PT");
-    return_string = wxString("Portugu√™s", wxConvUTF8);
+    return_string = wxString("Portugu®∫s", wxConvUTF8);
 
   } else if ((lang_canonical == _T("pt_BR")) || (lang_canonical == _T("pt_BR"))) {
     dir_suffix = _T("pt_BR");
-    return_string = wxString("Portugu√™s  Brasileiro", wxConvUTF8);
+    return_string = wxString("Portugu®∫s  Brasileiro", wxConvUTF8);
 
   } else if ((lang_canonical == _T("ru_RU")) || (lang_canonical == _T("ru"))) {
     dir_suffix = _T("ru");
-    return_string = wxString("–†—É—Å—Å–∫–∏–π", wxConvUTF8);
+    return_string = wxString("ß≤ßÂß„ß„ß‹ß⁄ß€", wxConvUTF8);
 
   } else if ((lang_canonical == _T("sv_SE")) || (lang_canonical == _T("sv"))) {
     dir_suffix = _T("sv");
@@ -8363,11 +8363,11 @@ wxString GetOCPNKnownLanguage(wxString lang_canonical, wxString& lang_dir) {
 
   } else if ((lang_canonical == _T("tr_TR")) || (lang_canonical == _T("tr"))) {
     dir_suffix = _T("tr_TR");
-    return_string = wxString("T√ºrk√ße", wxConvUTF8);
+    return_string = wxString("T®πrk?e", wxConvUTF8);
 
   } else if ((lang_canonical == _T("el_GR")) || (lang_canonical == _T("el"))) {
     dir_suffix = _T("el_GR");
-    return_string = wxString("ŒïŒªŒªŒ∑ŒΩŒπŒ∫Œ¨", wxConvUTF8);
+    return_string = wxString("¶•¶À¶À¶«¶Õ¶…¶ ?", wxConvUTF8);
 
   } else if ((lang_canonical == _T("hu_HU")) || (lang_canonical == _T("hu"))) {
     dir_suffix = _T("hu_HU");
@@ -8375,7 +8375,7 @@ wxString GetOCPNKnownLanguage(wxString lang_canonical, wxString& lang_dir) {
 
   } else if ((lang_canonical == _T("zh_TW")) || (lang_canonical == _T("zh_TW"))) {
     dir_suffix = _T("zh_TW");
-    return_string = wxString("Ê≠£È´îÂ≠ó", wxConvUTF8);
+    return_string = wxString("∑±ÃÂ◊÷", wxConvUTF8);
 
   } else if ((lang_canonical == _T("zh_CN")) || (lang_canonical == _T("zh_CN"))) {
       dir_suffix = _T("zh_CN");
