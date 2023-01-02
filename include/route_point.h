@@ -24,6 +24,7 @@
 #ifndef _ROUTEPOINT_H__
 #define _ROUTEPOINT_H__
 
+#include <vector>
 #include <wx/bitmap.h>
 #include <wx/clrpicker.h>
 #include <wx/datetime.h>
@@ -31,10 +32,10 @@
 #include <wx/gauge.h>
 #include <wx/gdicmn.h>
 #include <wx/string.h>
-
 #include "bbox.h"
 #include "hyperlink.h"
 #include "chcanv.h"
+#include "geography_point.h"
 
 #define MAX_INT_VAL 2147483647  // max possible integer value before 'rollover'
 
@@ -137,6 +138,8 @@ public:
   void SetUseSca(bool value) { b_UseScamin = value; };
   bool IsDragHandleEnabled() { return m_bDrawDragHandle; }
   void SetPlannedSpeed(double spd);
+  void SetObstacle(bool flag) { is_radar_obstacle_waypoint_ = flag; }
+  void AddObstacleOutlinePoint(GeographyPoint& location);
   double GetPlannedSpeed();
   wxDateTime GetETD();
   wxDateTime GetManualETD();
@@ -193,6 +196,9 @@ public:
 
   bool m_bShowWaypointRangeRings;
   int m_iWaypointRangeRingsNumber;
+
+  bool is_radar_obstacle_waypoint_; // 如果该点表示雷达的障碍物，则为true，其他为false；
+  std::vector<GeographyPoint> radar_obstacle_coordinate_; 
 
   float m_fWaypointRangeRingsStep;
   int m_iWaypointRangeRingsStepUnits;

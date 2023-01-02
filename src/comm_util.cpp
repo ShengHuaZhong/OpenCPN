@@ -70,3 +70,13 @@ wxString ProcessNMEA4Tags(wxString& msg) {
 
   return msg;
 }
+
+void Int32ToDouble(const int source, double& destination)
+{
+  destination =  -((double)source / double(1 << 31)) * 180.0;
+}
+
+void DoubleToInt32(const double source, int& destination)
+{
+  destination = -(source / 180.0) * (1 << 31);
+}

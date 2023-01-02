@@ -80,6 +80,7 @@ public:
   bool SendMessage(std::shared_ptr<const NavMsg> msg,
                    std::shared_ptr<const NavAddr> addr) override;
   wxSocketBase* GetSock() const { return m_sock; }
+  wxIPV4address GetAddr() const { return m_addr; }
 
 private:
   ConnectionParams m_params;
@@ -87,7 +88,6 @@ private:
 
   void handle_N0183_MSG(CommDriverN0183NetEvent& event);
   wxString GetNetPort() const { return m_net_port; }
-  wxIPV4address GetAddr() const { return m_addr; }
   wxTimer* GetSocketThreadWatchdogTimer() {
     return &m_socketread_watchdog_timer;
   }

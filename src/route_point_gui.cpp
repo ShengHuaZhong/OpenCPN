@@ -567,6 +567,36 @@ void RoutePointGui::DrawGL(ViewPort &vp, ChartCanvas *canvas, ocpnDC &dc,
     dc.SetBrush(saveBrush);
   }
 
+
+  // Draw radar obstacke if activated
+  if (m_point.is_radar_obstacle_waypoint_ && m_point.radar_obstacle_coordinate_.size() > 3) {
+    double factor = 1.00;
+    if (m_point.m_iWaypointRangeRingsStepUnits == 1)  // nautical miles
+      factor = 1 / 1.852;
+    factor *= m_point.m_fWaypointRangeRingsStep;
+    // 0.5 mm nominal, but not less than 1 pixel
+    wxColor ring_dim_color = *wxRED;
+    double platform_pen_width = wxRound(
+      wxMax(1.0, g_Platform->GetDisplayDPmm() / 2));
+    wxPen ppPen1(ring_dim_color, platform_pen_width);
+    wxBrush saveBrush = dc.GetBrush();
+    wxPen savePen = dc.GetPen();
+    dc.SetPen(ppPen1);
+    dc.SetBrush(wxBrush(ring_dim_color, wxBRUSHSTYLE_TRANSPARENT));
+
+    std::vector<wxPoint> outline_pix_position{};
+    for (auto& outline_point : m_point.radar_obstacle_coordinate_) {
+      double tlat, tlon;
+      wxPoint r1;
+      ll_gc_ll(outline_point.latitude, outline_point.longitude, 0, factor, &tlat, &tlon);
+      canvas->GetCanvasPointPix(tlat, tlon, &r1);
+      outline_pix_position.push_back(r1);
+    }
+    dc.DrawLines(outline_pix_position.size(), outline_pix_position.data());
+    dc.SetPen(savePen);
+    dc.SetBrush(saveBrush);
+  }
+
   // Render Drag handle if enabled
   if (m_point.m_bDrawDragHandle) {
     //  A line, southeast, scaled to the size of the icon

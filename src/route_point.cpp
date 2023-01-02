@@ -448,6 +448,11 @@ void RoutePoint::SetPlannedSpeed(double spd) {
   if (spd >= 0.0 && spd <= 1000.0) m_PlannedSpeed = spd;
 }
 
+void RoutePoint::AddObstacleOutlinePoint(GeographyPoint& location)
+{
+  radar_obstacle_coordinate_.push_back(location);
+}
+
 double RoutePoint::GetPlannedSpeed() {
   if (m_PlannedSpeed < 0.0001 &&
       m_MarkDescription.Find(_T("VMG=")) != wxNOT_FOUND) {

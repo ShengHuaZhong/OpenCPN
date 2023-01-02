@@ -358,7 +358,7 @@ void CommDriverN0183Net::OnTimerSocket(wxTimerEvent& event) {
 bool CommDriverN0183Net::SendMessage(std::shared_ptr<const NavMsg> msg,
                                      std::shared_ptr<const NavAddr> addr) {
   auto msg_0183 = std::dynamic_pointer_cast<const Nmea0183Msg>(msg);
-  return SendSentenceNetwork(msg_0183->payload.c_str());
+  return SendSentenceNetwork({ msg_0183->payload.c_str(),msg_0183->payload.size()});
 }
 
 

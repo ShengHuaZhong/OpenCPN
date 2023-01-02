@@ -134,7 +134,7 @@
 #include "comm_bridge.h"
 #include "certificates.h"
 #include "mDNS_query.h"
-
+#include "unmanned_vessel_socket.h"
 //#include "usb_devices.h"
 //#include "comm_drv_registry.h"
 //#include "comm_navmsg_bus.h"
@@ -1072,6 +1072,8 @@ MyApp::MyApp() {
     setenv("GDK_BACKEND", "x11", 1);
 
 #endif   // __linux__
+
+  unmanned_vessel_socket_ = nullptr;
 }
 
 bool MyApp::OnInit() {
@@ -2063,6 +2065,12 @@ bool MyApp::OnInit() {
     StartMDNSService(g_hostname.ToStdString(), "opencpn-object-control-service", 8000);
   }
 
+  //initilization unmanned vessel socket
+  unmanned_vessel_socket_ = new UnmannedVesselSocket();
+  if (unmanned_vessel_socket_ == nullptr) {
+    wxLogMessage(_T("opencpn::MyApp initilization failed for unmanned vessel socket"));
+  }
+
   return TRUE;
 }
 
@@ -2185,6 +2193,9 @@ void RestoreSystemColors(void);
   g_Platform->OnExit_2();
   safe_mode::clear_check();
 
+
+  delete unmanned_vessel_socket_;
+  unmanned_vessel_socket_ = nullptr;
   return TRUE;
 }
 

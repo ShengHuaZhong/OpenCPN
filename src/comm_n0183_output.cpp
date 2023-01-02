@@ -48,6 +48,7 @@
 #include "nmea0183.h"
 #include "route.h"
 #include "NMEALogWindow.h"
+#include "unmanned_vessel_meesage_header.h"
 
 #ifdef USE_GARMINHOST
 #include "garmin_wrapper.h"
@@ -60,11 +61,11 @@ extern wxArrayOfConnPrm *g_pConnectionParams;
 extern int g_maxWPNameLength;
 extern wxString g_TalkerIdText;
 
-//FIXME (dave)  think about GUI feedback, disabled herein
+// FIXME (dave)  think about GUI feedback, disabled herein
 
 void LogBroadcastOutputMessageColor(const wxString &msg,
-                                        const wxString &stream_name,
-                                        const wxString &color) {
+                                    const wxString &stream_name,
+                                    const wxString &color) {
 #ifndef CLIAPP
 
   if (NMEALogWindow::Get().Active()) {
@@ -81,17 +82,16 @@ void LogBroadcastOutputMessageColor(const wxString &msg,
     ss.Prepend(color);
 
     NMEALogWindow::Get().Add(ss.ToStdString());
-
   }
 #endif
 }
 
 void BroadcastNMEA0183Message(const wxString &msg) {
+  auto &registry = CommDriverRegistry::GetInstance();
+  const std::vector<std::shared_ptr<AbstractCommDriver>> &drivers =
+      registry.GetDrivers();
 
-  auto& registry = CommDriverRegistry::GetInstance();
-  const std::vector<std::shared_ptr<AbstractCommDriver>>& drivers = registry.GetDrivers();
-
-  for (auto& driver : drivers) {
+  for (auto &driver : drivers) {
     if (driver->bus == NavAddr::Bus::N0183) {
       ConnectionParams params;
       auto drv_serial =
@@ -106,52 +106,53 @@ void BroadcastNMEA0183Message(const wxString &msg) {
       }
 
       if (params.IOSelect == DS_TYPE_INPUT_OUTPUT ||
-              params.IOSelect == DS_TYPE_OUTPUT) {
+          params.IOSelect == DS_TYPE_OUTPUT) {
         bool bout_filter = params.SentencePassesFilter(msg, FILTER_OUTPUT);
         if (bout_filter) {
-          std::string id = msg.ToStdString().substr(1,5);
-          auto msg_out = std::make_shared<Nmea0183Msg>(id,
-                                             msg.ToStdString(),
-                                             std::make_shared<NavAddr0183>(driver->iface));
+          std::string id = msg.ToStdString().substr(1, 5);
+          auto msg_out = std::make_shared<Nmea0183Msg>(
+              id, msg.ToStdString(),
+              std::make_shared<NavAddr0183>(driver->iface));
 
-          bool bxmit_ok = driver->SendMessage(msg_out, std::make_shared<NavAddr0183>(driver->iface));
+          bool bxmit_ok = driver->SendMessage(
+              msg_out, std::make_shared<NavAddr0183>(driver->iface));
 
           if (bxmit_ok)
-            LogBroadcastOutputMessageColor(msg, params.GetDSPort(), _T("<BLUE>"));
+            LogBroadcastOutputMessageColor(msg, params.GetDSPort(),
+                                           _T("<BLUE>"));
           else
-            LogBroadcastOutputMessageColor(msg, params.GetDSPort(), _T("<RED>"));
-        }
-        else
-          LogBroadcastOutputMessageColor(msg, params.GetDSPort(), _T("<CORAL>"));
-
+            LogBroadcastOutputMessageColor(msg, params.GetDSPort(),
+                                           _T("<RED>"));
+        } else
+          LogBroadcastOutputMessageColor(msg, params.GetDSPort(),
+                                         _T("<CORAL>"));
       }
     }
   }
   // Send to plugins
-  //FIXME (dave)
-//  if (g_pi_manager) g_pi_manager->SendNMEASentenceToAllPlugIns(msg);
+  // FIXME (dave)
+  //  if (g_pi_manager) g_pi_manager->SendNMEASentenceToAllPlugIns(msg);
 }
 
-
-std::shared_ptr<AbstractCommDriver> CreateOutputConnection(const wxString &com_name,
-                                                           std::shared_ptr<AbstractCommDriver> &old_driver,
-                                                           ConnectionParams &params_save,
-                                                           bool &btempStream, bool &b_restoreStream){
-
+std::shared_ptr<AbstractCommDriver> CreateOutputConnection(
+    const wxString &com_name, std::shared_ptr<AbstractCommDriver> &old_driver,
+    ConnectionParams &params_save, bool &btempStream, bool &b_restoreStream) {
   std::shared_ptr<AbstractCommDriver> driver;
-  auto& registry = CommDriverRegistry::GetInstance();
-  const std::vector<std::shared_ptr<AbstractCommDriver>>& drivers = registry.GetDrivers();
+  auto &registry = CommDriverRegistry::GetInstance();
+  const std::vector<std::shared_ptr<AbstractCommDriver>> &drivers =
+      registry.GetDrivers();
 
   if (com_name.Lower().StartsWith("serial")) {
     wxString comx = com_name.AfterFirst(':');  // strip "Serial:"
-    comx = comx.BeforeFirst(' ');  // strip off any description provided by Windows
+    comx =
+        comx.BeforeFirst(' ');  // strip off any description provided by Windows
 
     old_driver = FindDriver(drivers, comx.ToStdString());
     wxLogDebug("Looking for old stream %s", com_name);
 
     if (old_driver) {
       auto drv_serial_n0183 =
-         std::dynamic_pointer_cast<CommDriverN0183Serial>(old_driver);
+          std::dynamic_pointer_cast<CommDriverN0183Serial>(old_driver);
       if (drv_serial_n0183) {
         params_save = drv_serial_n0183->GetParams();
       }
@@ -165,8 +166,8 @@ std::shared_ptr<AbstractCommDriver> CreateOutputConnection(const wxString &com_n
   }
 
   if (com_name.Lower().StartsWith("serial")) {
-      //  If the port was temporarily closed, reopen as I/O type
-      //  Otherwise, open another port using default properties
+    //  If the port was temporarily closed, reopen as I/O type
+    //  Otherwise, open another port using default properties
     int baud;
 
     if (old_driver) {
@@ -185,10 +186,10 @@ std::shared_ptr<AbstractCommDriver> CreateOutputConnection(const wxString &com_n
     btempStream = true;
 
 #ifdef __ANDROID__
-      wxMilliSleep(1000);
+    wxMilliSleep(1000);
 #else
     auto drv_serial_n0183 =
-         std::dynamic_pointer_cast<CommDriverN0183Serial>(driver);
+        std::dynamic_pointer_cast<CommDriverN0183Serial>(driver);
     if (drv_serial_n0183) {
       //  Wait up to 1 seconds for serial Driver secondary thread to come up
       int timeout = 0;
@@ -203,97 +204,91 @@ std::shared_ptr<AbstractCommDriver> CreateOutputConnection(const wxString &com_n
         msg += _T(" ...Could not be opened for writing");
         wxLogMessage(msg);
       }
-
     }
 #endif
-  }
-    else if (com_name.Find("Bluetooth") != wxNOT_FOUND) {
-      if (!driver) {
-        ConnectionParams ConnectionParams;
-        ConnectionParams.Type = INTERNAL_BT;
-        wxStringTokenizer tkz(com_name, _T(";"));
-        wxString name = tkz.GetNextToken();
-        wxString mac = tkz.GetNextToken();
+  } else if (com_name.Find("Bluetooth") != wxNOT_FOUND) {
+    if (!driver) {
+      ConnectionParams ConnectionParams;
+      ConnectionParams.Type = INTERNAL_BT;
+      wxStringTokenizer tkz(com_name, _T(";"));
+      wxString name = tkz.GetNextToken();
+      wxString mac = tkz.GetNextToken();
 
-        ConnectionParams.NetworkAddress = name;
-        ConnectionParams.Port = mac;
-        ConnectionParams.NetworkPort = 0;
-        ConnectionParams.NetProtocol = PROTO_UNDEFINED;
-        ConnectionParams.Baudrate = 0;
+      ConnectionParams.NetworkAddress = name;
+      ConnectionParams.Port = mac;
+      ConnectionParams.NetworkPort = 0;
+      ConnectionParams.NetProtocol = PROTO_UNDEFINED;
+      ConnectionParams.Baudrate = 0;
 
-        driver = MakeCommDriver(&ConnectionParams);
+      driver = MakeCommDriver(&ConnectionParams);
 
-        btempStream = true;
-      }
+      btempStream = true;
     }
-    else if (com_name.Lower().StartsWith("udp") ||
+  } else if (com_name.Lower().StartsWith("udp") ||
              com_name.Lower().StartsWith("tcp")) {
-      std::shared_ptr<CommDriverN0183Net> drv_net_n0183;
+    std::shared_ptr<CommDriverN0183Net> drv_net_n0183;
 
-      if (!driver) {
-        NetworkProtocol protocol = UDP;
-        if (com_name.Lower().StartsWith("tcp")) protocol = TCP;
-        wxStringTokenizer tkz(com_name, _T(":"));
-        wxString token = tkz.GetNextToken();
-        wxString address = tkz.GetNextToken();
-        token = tkz.GetNextToken();
-        long port;
-        token.ToLong(&port);
+    if (!driver) {
+      NetworkProtocol protocol = UDP;
+      if (com_name.Lower().StartsWith("tcp")) protocol = TCP;
+      wxStringTokenizer tkz(com_name, _T(":"));
+      wxString token = tkz.GetNextToken();
+      wxString address = tkz.GetNextToken();
+      token = tkz.GetNextToken();
+      long port;
+      token.ToLong(&port);
 
-        ConnectionParams cp;
-        cp.Type = NETWORK;
-        cp.NetProtocol = protocol;
-        cp.NetworkAddress = address;
-        cp.NetworkPort = port;
-        cp.IOSelect = DS_TYPE_INPUT_OUTPUT;
+      ConnectionParams cp;
+      cp.Type = NETWORK;
+      cp.NetProtocol = protocol;
+      cp.NetworkAddress = address;
+      cp.NetworkPort = port;
+      cp.IOSelect = DS_TYPE_INPUT_OUTPUT;
 
-        driver = MakeCommDriver(&cp);
-        btempStream = true;
-      }
-      drv_net_n0183 =
-          std::dynamic_pointer_cast<CommDriverN0183Net>(driver);
+      driver = MakeCommDriver(&cp);
+      btempStream = true;
+    }
+    drv_net_n0183 = std::dynamic_pointer_cast<CommDriverN0183Net>(driver);
 
-      if (com_name.Lower().StartsWith("tcp")) {
-        // new tcp connections must wait for connect
-//         wxString msg = _("Connecting to ");
-//         msg += com_name;
-//         dialog->SetMessage(msg);
-//         dialog->GetProgressGauge()->Pulse();
+    if (com_name.Lower().StartsWith("tcp")) {
+      // new tcp connections must wait for connect
+      //         wxString msg = _("Connecting to ");
+      //         msg += com_name;
+      //         dialog->SetMessage(msg);
+      //         dialog->GetProgressGauge()->Pulse();
 
-
-        if (drv_net_n0183) {
-          int loopCount = 10;  // seconds
-          bool bconnected = false;
-          while (!bconnected && (loopCount > 0)) {
-            if (drv_net_n0183->GetSock()->IsConnected()) {
-              bconnected = true;
-              break;
-            }
-//           dialog->GetProgressGauge()->Pulse();
-//           wxYield();
-            wxSleep(1);
-            loopCount--;
+      if (drv_net_n0183) {
+        int loopCount = 10;  // seconds
+        bool bconnected = false;
+        while (!bconnected && (loopCount > 0)) {
+          if (drv_net_n0183->GetSock()->IsConnected()) {
+            bconnected = true;
+            break;
           }
+          //           dialog->GetProgressGauge()->Pulse();
+          //           wxYield();
+          wxSleep(1);
+          loopCount--;
+        }
 
-          if (bconnected) {
-//           msg = _("Connected to ");
-//           msg += com_name;
-//           dialog->SetMessage(msg);
-          } else {
-            if (btempStream) {
-              registry.Deactivate(driver);
-            }
-            return 0;
+        if (bconnected) {
+          //           msg = _("Connected to ");
+          //           msg += com_name;
+          //           dialog->SetMessage(msg);
+        } else {
+          if (btempStream) {
+            registry.Deactivate(driver);
           }
+          return 0;
         }
       }
+    }
   }
   return driver;
 }
 
-
 int SendRouteToGPS_N0183(Route *pr, const wxString &com_name,
-                                bool bsend_waypoints/*, SendToGpsDlg *dialog*/) {
+                         bool bsend_waypoints /*, SendToGpsDlg *dialog*/) {
   int ret_val = 0;
 
   ConnectionParams params_save;
@@ -301,17 +296,63 @@ int SendRouteToGPS_N0183(Route *pr, const wxString &com_name,
   bool btempStream = false;
   std::shared_ptr<AbstractCommDriver> old_driver;
   std::shared_ptr<AbstractCommDriver> driver;
-  auto& registry = CommDriverRegistry::GetInstance();
+  auto &registry = CommDriverRegistry::GetInstance();
 
-  driver = CreateOutputConnection(com_name, old_driver,
-                                  params_save, btempStream, b_restoreStream);
-  if (!driver)
-    return 1;
+  driver = CreateOutputConnection(com_name, old_driver, params_save,
+                                  btempStream, b_restoreStream);
+  if (!driver) return 1;
 
   auto drv_n0183 = std::dynamic_pointer_cast<CommDriverN0183>(driver);
   auto address = std::make_shared<NavAddr0183>(drv_n0183->iface);
 
+  if (com_name.Lower().StartsWith("udp") &&
+      com_name.Lower().EndsWith("unmanned_vessel")) {
+    const size_t max_send_buffer_size = 2048;
+    char send_buf[max_send_buffer_size]{};
+    size_t send_size = 0;
+    UnmannedVesselMessageHeader message_header{};
+    message_header.flag = 0x5a5a;
+    memcpy_s(send_buf + send_size, sizeof(message_header), &message_header,
+             sizeof(message_header));
+    send_size += sizeof(message_header);
+    uint32_t number_of_route_point = pr->pRoutePointList->size();
+    if (max_send_buffer_size > send_size) {
+      memcpy_s(send_buf + send_size, sizeof(number_of_route_point),
+               &number_of_route_point, sizeof(number_of_route_point));
+      send_size += sizeof(number_of_route_point);
 
+      // send to unmanned vessel
+      auto node = pr->pRoutePointList->GetFirst();
+      while (node) {
+        auto route_point = node->GetData();
+        double longitude = route_point->GetLongitude();
+        double latitude = route_point->GetLatitude();
+        if (max_send_buffer_size > send_size) {
+          memcpy_s(send_buf + send_size, sizeof(longitude), &longitude,
+                   sizeof(longitude));
+          send_size += sizeof(longitude);
+        }
+        if (max_send_buffer_size > send_size) {
+          memcpy_s(send_buf + send_size, sizeof(latitude), &longitude,
+                   sizeof(latitude));
+          send_size += sizeof(latitude);
+        }
+        node = node->GetNext();
+      }
+
+      if (max_send_buffer_size > send_size) {
+        auto net_socket = std::dynamic_pointer_cast<CommDriverN0183Net>(driver);
+        auto udp_socket =
+            dynamic_cast<wxDatagramSocket *>(net_socket->GetSock());
+        if (udp_socket && udp_socket->IsOk()) {
+          udp_socket->SendTo(net_socket->GetAddr(), send_buf, send_size);
+        }
+      } else {
+        wxLogMessage("Insufficient sending buffer, unable to send route data");
+      }
+    }
+    return ret_val;
+  }
 #if 0
 
   if (g_GPS_Ident == _T("FurunoGP3X")) {
@@ -358,7 +399,7 @@ int SendRouteToGPS_N0183(Route *pr, const wxString &com_name,
 
       wxLogMessage(_T("Sending Routes..."));
       int ret1 = Garmin_GPS_SendRoute(wxString(_T("usb:")), pr,
-                                      0/*dialog->GetProgressGauge()*/);
+                                      0 /*dialog->GetProgressGauge()*/);
 
       if (ret1 != 1) {
         wxLogMessage(_T(" Error Sending Routes"));
@@ -381,11 +422,11 @@ int SendRouteToGPS_N0183(Route *pr, const wxString &com_name,
 
   if (g_bGarminHostUpload) {
     int lret_val;
-//     if (dialog && dialog->GetProgressGauge()) {
-//       dialog->GetProgressGauge()->SetValue(20);
-//       dialog->GetProgressGauge()->Refresh();
-//       dialog->GetProgressGauge()->Update();
-//     }
+    //     if (dialog && dialog->GetProgressGauge()) {
+    //       dialog->GetProgressGauge()->SetValue(20);
+    //       dialog->GetProgressGauge()->Refresh();
+    //       dialog->GetProgressGauge()->Update();
+    //     }
 
     wxString short_com = com_name.Mid(7);
     // Initialize the Garmin receiver, build required Jeeps internal data
@@ -415,13 +456,14 @@ int SendRouteToGPS_N0183(Route *pr, const wxString &com_name,
       wxLogMessage(msg);
     }
 
-//     if (dialog && dialog->GetProgressGauge()) {
-//       dialog->GetProgressGauge()->SetValue(40);
-//       dialog->GetProgressGauge()->Refresh();
-//       dialog->GetProgressGauge()->Update();
-//     }
+    //     if (dialog && dialog->GetProgressGauge()) {
+    //       dialog->GetProgressGauge()->SetValue(40);
+    //       dialog->GetProgressGauge()->Refresh();
+    //       dialog->GetProgressGauge()->Update();
+    //     }
 
-    lret_val = Garmin_GPS_SendRoute(short_com, pr, 0/*dialog->GetProgressGauge()*/);
+    lret_val =
+        Garmin_GPS_SendRoute(short_com, pr, 0 /*dialog->GetProgressGauge()*/);
     if (lret_val != 1) {
       wxString msg(_T("Error Sending Route to Garmin GPS on port: "));
       msg += short_com;
@@ -441,11 +483,11 @@ int SendRouteToGPS_N0183(Route *pr, const wxString &com_name,
 
   ret_point:
 
-//     if (dialog && dialog->GetProgressGauge()) {
-//       dialog->GetProgressGauge()->SetValue(100);
-//       dialog->GetProgressGauge()->Refresh();
-//       dialog->GetProgressGauge()->Update();
-//     }
+    //     if (dialog && dialog->GetProgressGauge()) {
+    //       dialog->GetProgressGauge()->SetValue(100);
+    //       dialog->GetProgressGauge()->Refresh();
+    //       dialog->GetProgressGauge()->Update();
+    //     }
 
     wxMilliSleep(500);
 
@@ -456,323 +498,90 @@ int SendRouteToGPS_N0183(Route *pr, const wxString &com_name,
 #if 1
   {
     SENTENCE snt;
-      NMEA0183 oNMEA0183;
-      oNMEA0183.TalkerID = _T ( "EC" );
+    NMEA0183 oNMEA0183;
+    oNMEA0183.TalkerID = _T ( "EC" );
 
-      int nProg = pr->pRoutePointList->GetCount() + 1;
-//       if (dialog && dialog->GetProgressGauge())
-//         dialog->GetProgressGauge()->SetRange(100);
+    int nProg = pr->pRoutePointList->GetCount() + 1;
+    //       if (dialog && dialog->GetProgressGauge())
+    //         dialog->GetProgressGauge()->SetRange(100);
 
-      int progress_stall = 500;
-      if (pr->pRoutePointList->GetCount() > 10) progress_stall = 200;
+    int progress_stall = 500;
+    if (pr->pRoutePointList->GetCount() > 10) progress_stall = 200;
 
-//       if (!dialog) progress_stall = 200;  // 80 chars at 4800 baud is ~160 msec
+    //       if (!dialog) progress_stall = 200;  // 80 chars at 4800 baud is
+    //       ~160 msec
 
-      // Send out the waypoints, in order
-      if (bsend_waypoints) {
-        wxRoutePointListNode *node = pr->pRoutePointList->GetFirst();
-
-        int ip = 1;
-        while (node) {
-          RoutePoint *prp = node->GetData();
-
-          if (g_GPS_Ident == _T("Generic")) {
-            if (prp->m_lat < 0.)
-              oNMEA0183.Wpl.Position.Latitude.Set(-prp->m_lat, _T ( "S" ));
-            else
-              oNMEA0183.Wpl.Position.Latitude.Set(prp->m_lat, _T ( "N" ));
-
-            if (prp->m_lon < 0.)
-              oNMEA0183.Wpl.Position.Longitude.Set(-prp->m_lon, _T ( "W" ));
-            else
-              oNMEA0183.Wpl.Position.Longitude.Set(prp->m_lon, _T ( "E" ));
-
-            oNMEA0183.Wpl.To = prp->GetName().Truncate(g_maxWPNameLength);
-
-            oNMEA0183.Wpl.Write(snt);
-
-          } else if (g_GPS_Ident == _T("FurunoGP3X")) {
-            //  Furuno has its own talker ID, so do not allow the global
-            //  override
-            wxString talker_save = g_TalkerIdText;
-            g_TalkerIdText.Clear();
-
-            oNMEA0183.TalkerID = _T ( "PFEC," );
-
-            if (prp->m_lat < 0.)
-              oNMEA0183.GPwpl.Position.Latitude.Set(-prp->m_lat, _T ( "S" ));
-            else
-              oNMEA0183.GPwpl.Position.Latitude.Set(prp->m_lat, _T ( "N" ));
-
-            if (prp->m_lon < 0.)
-              oNMEA0183.GPwpl.Position.Longitude.Set(-prp->m_lon, _T ( "W" ));
-            else
-              oNMEA0183.GPwpl.Position.Longitude.Set(prp->m_lon, _T ( "E" ));
-
-            wxString name = prp->GetName();
-            name += _T("000000");
-            name.Truncate(g_maxWPNameLength);
-            oNMEA0183.GPwpl.To = name;
-
-            oNMEA0183.GPwpl.Write(snt);
-
-            g_TalkerIdText = talker_save;
-          }
-
-          wxString payload = snt.Sentence;
-
-          // for some gps, like some garmin models, they assume the first
-          // waypoint in the route is the boat location, therefore it is
-          // dropped. These gps also can only accept a maximum of up to 20
-          // waypoints at a time before a delay is needed and a new string of
-          // waypoints may be sent. To ensure all waypoints will arrive, we can
-          // simply send each one twice. This ensures that the gps  will get the
-          // waypoint and also allows us to send as many as we like
-          //
-          //  We need only send once for FurunoGP3X models
-
-          auto msg_out = std::make_shared<Nmea0183Msg>(std::string("ECWPL"),
-                                             snt.Sentence.ToStdString(),
-                                             address);
-
-          drv_n0183->SendMessage(msg_out, address);
-          if (g_GPS_Ident != _T("FurunoGP3X"))
-            drv_n0183->SendMessage(msg_out, address);
-
-//             LogOutputMessage(snt.Sentence, dstr->GetPort(), false);
-
-          wxString msg(_T("-->GPS Port:"));
-          msg += com_name;
-          msg += _T(" Sentence: ");
-          msg += snt.Sentence;
-          msg.Trim();
-          wxLogMessage(msg);
-
-//           if (dialog && dialog->GetProgressGauge()) {
-//             dialog->GetProgressGauge()->SetValue((ip * 100) / nProg);
-//             dialog->GetProgressGauge()->Refresh();
-//             dialog->GetProgressGauge()->Update();
-//           }
-
-          wxMilliSleep(progress_stall);
-
-          node = node->GetNext();
-
-          ip++;
-        }
-      }
-
-      // Create the NMEA Rte sentence
-      // Try to create a single sentence, and then check the length to see if
-      // too long
-      unsigned int max_length = 76;
-      unsigned int max_wp = 2;  // seems to be required for garmin...
-
-      //  Furuno GPS can only accept 5 (five) waypoint linkage sentences....
-      //  So, we need to compact a few more points into each link sentence.
-      if (g_GPS_Ident == _T("FurunoGP3X")) {
-        max_wp = 8;
-        max_length = 80;
-      }
-
-      //  Furuno has its own talker ID, so do not allow the global override
-      wxString talker_save = g_TalkerIdText;
-      if (g_GPS_Ident == _T("FurunoGP3X")) g_TalkerIdText.Clear();
-
-      oNMEA0183.Rte.Empty();
-      oNMEA0183.Rte.TypeOfRoute = CompleteRoute;
-
-      if (pr->m_RouteNameString.IsEmpty())
-        oNMEA0183.Rte.RouteName = _T ( "1" );
-      else
-        oNMEA0183.Rte.RouteName = pr->m_RouteNameString;
-
-      if (g_GPS_Ident == _T("FurunoGP3X")) {
-        oNMEA0183.Rte.RouteName = _T ( "01" );
-        oNMEA0183.TalkerID = _T ( "GP" );
-        oNMEA0183.Rte.m_complete_char = 'C';  // override the default "c"
-        oNMEA0183.Rte.m_skip_checksum = 1;    // no checksum needed
-      }
-
-      oNMEA0183.Rte.total_number_of_messages = 1;
-      oNMEA0183.Rte.message_number = 1;
-
-      // add the waypoints
+    // Send out the waypoints, in order
+    if (bsend_waypoints) {
       wxRoutePointListNode *node = pr->pRoutePointList->GetFirst();
+
+      int ip = 1;
       while (node) {
         RoutePoint *prp = node->GetData();
-        wxString name = prp->GetName().Truncate(g_maxWPNameLength);
 
-        if (g_GPS_Ident == _T("FurunoGP3X")) {
-          name = prp->GetName();
+        if (g_GPS_Ident == _T("Generic")) {
+          if (prp->m_lat < 0.)
+            oNMEA0183.Wpl.Position.Latitude.Set(-prp->m_lat, _T ( "S" ));
+          else
+            oNMEA0183.Wpl.Position.Latitude.Set(prp->m_lat, _T ( "N" ));
+
+          if (prp->m_lon < 0.)
+            oNMEA0183.Wpl.Position.Longitude.Set(-prp->m_lon, _T ( "W" ));
+          else
+            oNMEA0183.Wpl.Position.Longitude.Set(prp->m_lon, _T ( "E" ));
+
+          oNMEA0183.Wpl.To = prp->GetName().Truncate(g_maxWPNameLength);
+
+          oNMEA0183.Wpl.Write(snt);
+
+        } else if (g_GPS_Ident == _T("FurunoGP3X")) {
+          //  Furuno has its own talker ID, so do not allow the global
+          //  override
+          wxString talker_save = g_TalkerIdText;
+          g_TalkerIdText.Clear();
+
+          oNMEA0183.TalkerID = _T ( "PFEC," );
+
+          if (prp->m_lat < 0.)
+            oNMEA0183.GPwpl.Position.Latitude.Set(-prp->m_lat, _T ( "S" ));
+          else
+            oNMEA0183.GPwpl.Position.Latitude.Set(prp->m_lat, _T ( "N" ));
+
+          if (prp->m_lon < 0.)
+            oNMEA0183.GPwpl.Position.Longitude.Set(-prp->m_lon, _T ( "W" ));
+          else
+            oNMEA0183.GPwpl.Position.Longitude.Set(prp->m_lon, _T ( "E" ));
+
+          wxString name = prp->GetName();
           name += _T("000000");
           name.Truncate(g_maxWPNameLength);
-          name.Prepend(_T(" "));  // What Furuno calls "Skip Code", space means
-                                  // use the WP
+          oNMEA0183.GPwpl.To = name;
+
+          oNMEA0183.GPwpl.Write(snt);
+
+          g_TalkerIdText = talker_save;
         }
 
-        oNMEA0183.Rte.AddWaypoint(name);
-        node = node->GetNext();
-      }
+        wxString payload = snt.Sentence;
 
-      oNMEA0183.Rte.Write(snt);
+        // for some gps, like some garmin models, they assume the first
+        // waypoint in the route is the boat location, therefore it is
+        // dropped. These gps also can only accept a maximum of up to 20
+        // waypoints at a time before a delay is needed and a new string of
+        // waypoints may be sent. To ensure all waypoints will arrive, we can
+        // simply send each one twice. This ensures that the gps  will get the
+        // waypoint and also allows us to send as many as we like
+        //
+        //  We need only send once for FurunoGP3X models
 
-      if ((snt.Sentence.Len() > max_length) ||
-          (pr->pRoutePointList->GetCount() >
-           max_wp))  // Do we need split sentences?
-      {
-        // Make a route with zero waypoints to get tare load.
-        NMEA0183 tNMEA0183;
-        SENTENCE tsnt;
-        tNMEA0183.TalkerID = _T ( "EC" );
+        auto msg_out = std::make_shared<Nmea0183Msg>(
+            std::string("ECWPL"), snt.Sentence.ToStdString(), address);
 
-        tNMEA0183.Rte.Empty();
-        tNMEA0183.Rte.TypeOfRoute = CompleteRoute;
-
-        if (g_GPS_Ident != _T("FurunoGP3X")) {
-          if (pr->m_RouteNameString.IsEmpty())
-            tNMEA0183.Rte.RouteName = _T ( "1" );
-          else
-            tNMEA0183.Rte.RouteName = pr->m_RouteNameString;
-
-        } else {
-          tNMEA0183.Rte.RouteName = _T ( "01" );
-        }
-
-        tNMEA0183.Rte.Write(tsnt);
-
-        unsigned int tare_length = tsnt.Sentence.Len();
-        tare_length -= 3;  // Drop the checksum, for length calculations
-
-        wxArrayString sentence_array;
-
-        // Trial balloon: add the waypoints, with length checking
-        int n_total = 1;
-        bool bnew_sentence = true;
-        int sent_len = 0;
-        unsigned int wp_count = 0;
-
-        wxRoutePointListNode *node = pr->pRoutePointList->GetFirst();
-        while (node) {
-          RoutePoint *prp = node->GetData();
-          unsigned int name_len =
-              prp->GetName().Truncate(g_maxWPNameLength).Len();
-          if (g_GPS_Ident == _T("FurunoGP3X"))
-            name_len = 7;  // six chars, with leading space for "Skip Code"
-
-          if (bnew_sentence) {
-            sent_len = tare_length;
-            sent_len += name_len + 1;  // with comma
-            bnew_sentence = false;
-            node = node->GetNext();
-            wp_count = 1;
-
-          } else {
-            if ((sent_len + name_len > max_length) || (wp_count >= max_wp)) {
-              n_total++;
-              bnew_sentence = true;
-            } else {
-              if (wp_count == max_wp)
-                sent_len += name_len;  // with comma
-              else
-                sent_len += name_len + 1;  // with comma
-              wp_count++;
-              node = node->GetNext();
-            }
-          }
-        }
-
-        // Now we have the sentence count, so make the real sentences using the
-        // same counting logic
-        int final_total = n_total;
-        int n_run = 1;
-        bnew_sentence = true;
-
-        node = pr->pRoutePointList->GetFirst();
-        while (node) {
-          RoutePoint *prp = node->GetData();
-          wxString name = prp->GetName().Truncate(g_maxWPNameLength);
-          if (g_GPS_Ident == _T("FurunoGP3X")) {
-            name = prp->GetName();
-            name += _T("000000");
-            name.Truncate(g_maxWPNameLength);
-            name.Prepend(_T(" "));  // What Furuno calls "Skip Code", space
-                                    // means use the WP
-          }
-
-          unsigned int name_len = name.Len();
-
-          if (bnew_sentence) {
-            sent_len = tare_length;
-            sent_len += name_len + 1;  // comma
-            bnew_sentence = false;
-
-            oNMEA0183.Rte.Empty();
-            oNMEA0183.Rte.TypeOfRoute = CompleteRoute;
-
-            if (g_GPS_Ident != _T("FurunoGP3X")) {
-              if (pr->m_RouteNameString.IsEmpty())
-                oNMEA0183.Rte.RouteName = _T ( "1" );
-              else
-                oNMEA0183.Rte.RouteName = pr->m_RouteNameString;
-            } else {
-              oNMEA0183.Rte.RouteName = _T ( "01" );
-            }
-
-            oNMEA0183.Rte.total_number_of_messages = final_total;
-            oNMEA0183.Rte.message_number = n_run;
-            snt.Sentence.Clear();
-            wp_count = 1;
-
-            oNMEA0183.Rte.AddWaypoint(name);
-            node = node->GetNext();
-          } else {
-            if ((sent_len + name_len > max_length) || (wp_count >= max_wp)) {
-              n_run++;
-              bnew_sentence = true;
-
-              oNMEA0183.Rte.Write(snt);
-
-              sentence_array.Add(snt.Sentence);
-            } else {
-              sent_len += name_len + 1;  // comma
-              oNMEA0183.Rte.AddWaypoint(name);
-              wp_count++;
-              node = node->GetNext();
-            }
-          }
-        }
-
-        oNMEA0183.Rte.Write(snt);  // last one...
-        if (snt.Sentence.Len() > tare_length) sentence_array.Add(snt.Sentence);
-
-        for (unsigned int ii = 0; ii < sentence_array.GetCount(); ii++) {
-          wxString sentence = sentence_array[ii];
-
-          auto msg_out = std::make_shared<Nmea0183Msg>(std::string("ECRTE"),
-                                             sentence.ToStdString(),
-                                             address);
+        drv_n0183->SendMessage(msg_out, address);
+        if (g_GPS_Ident != _T("FurunoGP3X"))
           drv_n0183->SendMessage(msg_out, address);
 
-//             LogOutputMessage(sentence, dstr->GetPort(), false);
-
-          wxString msg(_T("-->GPS Port:"));
-          msg += com_name;
-          msg += _T(" Sentence: ");
-          msg += sentence;
-          msg.Trim();
-          wxLogMessage(msg);
-
-          wxMilliSleep(progress_stall);
-        }
-
-      } else {
-        auto msg_out = std::make_shared<Nmea0183Msg>(std::string("ECRTE"),
-                                             snt.Sentence.ToStdString(),
-                                             address);
-        drv_n0183->SendMessage(msg_out, address);
-
-        //LogOutputMessage(snt.Sentence, dstr->GetPort(), false);
+        //             LogOutputMessage(snt.Sentence, dstr->GetPort(), false);
 
         wxString msg(_T("-->GPS Port:"));
         msg += com_name;
@@ -780,76 +589,304 @@ int SendRouteToGPS_N0183(Route *pr, const wxString &com_name,
         msg += snt.Sentence;
         msg.Trim();
         wxLogMessage(msg);
+
+        //           if (dialog && dialog->GetProgressGauge()) {
+        //             dialog->GetProgressGauge()->SetValue((ip * 100) / nProg);
+        //             dialog->GetProgressGauge()->Refresh();
+        //             dialog->GetProgressGauge()->Update();
+        //           }
+
+        wxMilliSleep(progress_stall);
+
+        node = node->GetNext();
+
+        ip++;
       }
+    }
+
+    // Create the NMEA Rte sentence
+    // Try to create a single sentence, and then check the length to see if
+    // too long
+    unsigned int max_length = 76;
+    unsigned int max_wp = 2;  // seems to be required for garmin...
+
+    //  Furuno GPS can only accept 5 (five) waypoint linkage sentences....
+    //  So, we need to compact a few more points into each link sentence.
+    if (g_GPS_Ident == _T("FurunoGP3X")) {
+      max_wp = 8;
+      max_length = 80;
+    }
+
+    //  Furuno has its own talker ID, so do not allow the global override
+    wxString talker_save = g_TalkerIdText;
+    if (g_GPS_Ident == _T("FurunoGP3X")) g_TalkerIdText.Clear();
+
+    oNMEA0183.Rte.Empty();
+    oNMEA0183.Rte.TypeOfRoute = CompleteRoute;
+
+    if (pr->m_RouteNameString.IsEmpty())
+      oNMEA0183.Rte.RouteName = _T ( "1" );
+    else
+      oNMEA0183.Rte.RouteName = pr->m_RouteNameString;
+
+    if (g_GPS_Ident == _T("FurunoGP3X")) {
+      oNMEA0183.Rte.RouteName = _T ( "01" );
+      oNMEA0183.TalkerID = _T ( "GP" );
+      oNMEA0183.Rte.m_complete_char = 'C';  // override the default "c"
+      oNMEA0183.Rte.m_skip_checksum = 1;    // no checksum needed
+    }
+
+    oNMEA0183.Rte.total_number_of_messages = 1;
+    oNMEA0183.Rte.message_number = 1;
+
+    // add the waypoints
+    wxRoutePointListNode *node = pr->pRoutePointList->GetFirst();
+    while (node) {
+      RoutePoint *prp = node->GetData();
+      wxString name = prp->GetName().Truncate(g_maxWPNameLength);
 
       if (g_GPS_Ident == _T("FurunoGP3X")) {
-        wxString name = pr->GetName();
-        if (name.IsEmpty()) name = _T("RTECOMMENT");
-        wxString rte;
-        rte.Printf(_T("$PFEC,GPrtc,01,"));
-        rte += name.Left(16);
-        wxString rtep;
-        rtep.Printf(_T(",%c%c"), 0x0d, 0x0a);
-        rte += rtep;
+        name = prp->GetName();
+        name += _T("000000");
+        name.Truncate(g_maxWPNameLength);
+        name.Prepend(_T(" "));  // What Furuno calls "Skip Code", space means
+                                // use the WP
+      }
 
-        auto msg_out = std::make_shared<Nmea0183Msg>(std::string("GPRTC"),
-                                             rte.ToStdString(),
-                                             address);
+      oNMEA0183.Rte.AddWaypoint(name);
+      node = node->GetNext();
+    }
+
+    oNMEA0183.Rte.Write(snt);
+
+    if ((snt.Sentence.Len() > max_length) ||
+        (pr->pRoutePointList->GetCount() >
+         max_wp))  // Do we need split sentences?
+    {
+      // Make a route with zero waypoints to get tare load.
+      NMEA0183 tNMEA0183;
+      SENTENCE tsnt;
+      tNMEA0183.TalkerID = _T ( "EC" );
+
+      tNMEA0183.Rte.Empty();
+      tNMEA0183.Rte.TypeOfRoute = CompleteRoute;
+
+      if (g_GPS_Ident != _T("FurunoGP3X")) {
+        if (pr->m_RouteNameString.IsEmpty())
+          tNMEA0183.Rte.RouteName = _T ( "1" );
+        else
+          tNMEA0183.Rte.RouteName = pr->m_RouteNameString;
+
+      } else {
+        tNMEA0183.Rte.RouteName = _T ( "01" );
+      }
+
+      tNMEA0183.Rte.Write(tsnt);
+
+      unsigned int tare_length = tsnt.Sentence.Len();
+      tare_length -= 3;  // Drop the checksum, for length calculations
+
+      wxArrayString sentence_array;
+
+      // Trial balloon: add the waypoints, with length checking
+      int n_total = 1;
+      bool bnew_sentence = true;
+      int sent_len = 0;
+      unsigned int wp_count = 0;
+
+      wxRoutePointListNode *node = pr->pRoutePointList->GetFirst();
+      while (node) {
+        RoutePoint *prp = node->GetData();
+        unsigned int name_len =
+            prp->GetName().Truncate(g_maxWPNameLength).Len();
+        if (g_GPS_Ident == _T("FurunoGP3X"))
+          name_len = 7;  // six chars, with leading space for "Skip Code"
+
+        if (bnew_sentence) {
+          sent_len = tare_length;
+          sent_len += name_len + 1;  // with comma
+          bnew_sentence = false;
+          node = node->GetNext();
+          wp_count = 1;
+
+        } else {
+          if ((sent_len + name_len > max_length) || (wp_count >= max_wp)) {
+            n_total++;
+            bnew_sentence = true;
+          } else {
+            if (wp_count == max_wp)
+              sent_len += name_len;  // with comma
+            else
+              sent_len += name_len + 1;  // with comma
+            wp_count++;
+            node = node->GetNext();
+          }
+        }
+      }
+
+      // Now we have the sentence count, so make the real sentences using the
+      // same counting logic
+      int final_total = n_total;
+      int n_run = 1;
+      bnew_sentence = true;
+
+      node = pr->pRoutePointList->GetFirst();
+      while (node) {
+        RoutePoint *prp = node->GetData();
+        wxString name = prp->GetName().Truncate(g_maxWPNameLength);
+        if (g_GPS_Ident == _T("FurunoGP3X")) {
+          name = prp->GetName();
+          name += _T("000000");
+          name.Truncate(g_maxWPNameLength);
+          name.Prepend(_T(" "));  // What Furuno calls "Skip Code", space
+                                  // means use the WP
+        }
+
+        unsigned int name_len = name.Len();
+
+        if (bnew_sentence) {
+          sent_len = tare_length;
+          sent_len += name_len + 1;  // comma
+          bnew_sentence = false;
+
+          oNMEA0183.Rte.Empty();
+          oNMEA0183.Rte.TypeOfRoute = CompleteRoute;
+
+          if (g_GPS_Ident != _T("FurunoGP3X")) {
+            if (pr->m_RouteNameString.IsEmpty())
+              oNMEA0183.Rte.RouteName = _T ( "1" );
+            else
+              oNMEA0183.Rte.RouteName = pr->m_RouteNameString;
+          } else {
+            oNMEA0183.Rte.RouteName = _T ( "01" );
+          }
+
+          oNMEA0183.Rte.total_number_of_messages = final_total;
+          oNMEA0183.Rte.message_number = n_run;
+          snt.Sentence.Clear();
+          wp_count = 1;
+
+          oNMEA0183.Rte.AddWaypoint(name);
+          node = node->GetNext();
+        } else {
+          if ((sent_len + name_len > max_length) || (wp_count >= max_wp)) {
+            n_run++;
+            bnew_sentence = true;
+
+            oNMEA0183.Rte.Write(snt);
+
+            sentence_array.Add(snt.Sentence);
+          } else {
+            sent_len += name_len + 1;  // comma
+            oNMEA0183.Rte.AddWaypoint(name);
+            wp_count++;
+            node = node->GetNext();
+          }
+        }
+      }
+
+      oNMEA0183.Rte.Write(snt);  // last one...
+      if (snt.Sentence.Len() > tare_length) sentence_array.Add(snt.Sentence);
+
+      for (unsigned int ii = 0; ii < sentence_array.GetCount(); ii++) {
+        wxString sentence = sentence_array[ii];
+
+        auto msg_out = std::make_shared<Nmea0183Msg>(
+            std::string("ECRTE"), sentence.ToStdString(), address);
         drv_n0183->SendMessage(msg_out, address);
 
-//           LogOutputMessage(rte, dstr->GetPort(), false);
+        //             LogOutputMessage(sentence, dstr->GetPort(), false);
 
         wxString msg(_T("-->GPS Port:"));
         msg += com_name;
         msg += _T(" Sentence: ");
-        msg += rte;
+        msg += sentence;
         msg.Trim();
         wxLogMessage(msg);
 
-        wxString term;
-        term.Printf(_T("$PFEC,GPxfr,CTL,E%c%c"), 0x0d, 0x0a);
-
-        auto msg_outf = std::make_shared<Nmea0183Msg>(std::string("GPRTC"),
-                                             term.ToStdString(),
-                                             address);
-        drv_n0183->SendMessage(msg_outf, address);
-
-//           LogOutputMessage(term, dstr->GetPort(), false);
-
-        msg = wxString(_T("-->GPS Port:"));
-        msg += com_name;
-        msg += _T(" Sentence: ");
-        msg += term;
-        msg.Trim();
-        wxLogMessage(msg);
+        wxMilliSleep(progress_stall);
       }
 
-//       if (dialog && dialog->GetProgressGauge()) {
-//         dialog->GetProgressGauge()->SetValue(100);
-//         dialog->GetProgressGauge()->Refresh();
-//         dialog->GetProgressGauge()->Update();
-//       }
+    } else {
+      auto msg_out = std::make_shared<Nmea0183Msg>(
+          std::string("ECRTE"), snt.Sentence.ToStdString(), address);
+      drv_n0183->SendMessage(msg_out, address);
 
-      wxMilliSleep(progress_stall);
+      // LogOutputMessage(snt.Sentence, dstr->GetPort(), false);
 
-      ret_val = 0;
+      wxString msg(_T("-->GPS Port:"));
+      msg += com_name;
+      msg += _T(" Sentence: ");
+      msg += snt.Sentence;
+      msg.Trim();
+      wxLogMessage(msg);
+    }
 
-      //  All finished with the temp port
-      if (btempStream)
-        registry.Deactivate(driver);
+    if (g_GPS_Ident == _T("FurunoGP3X")) {
+      wxString name = pr->GetName();
+      if (name.IsEmpty()) name = _T("RTECOMMENT");
+      wxString rte;
+      rte.Printf(_T("$PFEC,GPrtc,01,"));
+      rte += name.Left(16);
+      wxString rtep;
+      rtep.Printf(_T(",%c%c"), 0x0d, 0x0a);
+      rte += rtep;
 
-      if (g_GPS_Ident == _T("FurunoGP3X")) g_TalkerIdText = talker_save;
+      auto msg_out = std::make_shared<Nmea0183Msg>(std::string("GPRTC"),
+                                                   rte.ToStdString(), address);
+      drv_n0183->SendMessage(msg_out, address);
+
+      //           LogOutputMessage(rte, dstr->GetPort(), false);
+
+      wxString msg(_T("-->GPS Port:"));
+      msg += com_name;
+      msg += _T(" Sentence: ");
+      msg += rte;
+      msg.Trim();
+      wxLogMessage(msg);
+
+      wxString term;
+      term.Printf(_T("$PFEC,GPxfr,CTL,E%c%c"), 0x0d, 0x0a);
+
+      auto msg_outf = std::make_shared<Nmea0183Msg>(
+          std::string("GPRTC"), term.ToStdString(), address);
+      drv_n0183->SendMessage(msg_outf, address);
+
+      //           LogOutputMessage(term, dstr->GetPort(), false);
+
+      msg = wxString(_T("-->GPS Port:"));
+      msg += com_name;
+      msg += _T(" Sentence: ");
+      msg += term;
+      msg.Trim();
+      wxLogMessage(msg);
+    }
+
+    //       if (dialog && dialog->GetProgressGauge()) {
+    //         dialog->GetProgressGauge()->SetValue(100);
+    //         dialog->GetProgressGauge()->Refresh();
+    //         dialog->GetProgressGauge()->Update();
+    //       }
+
+    wxMilliSleep(progress_stall);
+
+    ret_val = 0;
+
+    //  All finished with the temp port
+    if (btempStream) registry.Deactivate(driver);
+
+    if (g_GPS_Ident == _T("FurunoGP3X")) g_TalkerIdText = talker_save;
   }
 #endif
 ret_point_1:
 
-  if (b_restoreStream && old_driver)
-      MakeCommDriver(&params_save);
+  if (b_restoreStream && old_driver) MakeCommDriver(&params_save);
 
   return ret_val;
 }
 
-int SendWaypointToGPS_N0183(RoutePoint *prp, const wxString &com_name/*,SendToGpsDlg *dialog*/) {
+int SendWaypointToGPS_N0183(
+    RoutePoint *prp, const wxString &com_name /*,SendToGpsDlg *dialog*/) {
   int ret_val = 0;
 
   ConnectionParams params_save;
@@ -857,18 +894,17 @@ int SendWaypointToGPS_N0183(RoutePoint *prp, const wxString &com_name/*,SendToGp
   bool btempStream = false;
   std::shared_ptr<AbstractCommDriver> old_driver;
   std::shared_ptr<AbstractCommDriver> driver;
-  auto& registry = CommDriverRegistry::GetInstance();
+  auto &registry = CommDriverRegistry::GetInstance();
 
-  driver = CreateOutputConnection(com_name, old_driver,
-                                  params_save, btempStream, b_restoreStream);
-  if (!driver)
-    return 1;
+  driver = CreateOutputConnection(com_name, old_driver, params_save,
+                                  btempStream, b_restoreStream);
+  if (!driver) return 1;
 
   auto drv_n0183 = std::dynamic_pointer_cast<CommDriverN0183>(driver);
   auto address = std::make_shared<NavAddr0183>(drv_n0183->iface);
 
 #ifdef USE_GARMINHOST
-  //FIXME (dave)
+  // FIXME (dave)
 #ifdef __WXMSW__
   if (com_name.Upper().Matches(_T("*GARMIN*")))  // Garmin USB Mode
   {
@@ -985,8 +1021,8 @@ int SendWaypointToGPS_N0183(RoutePoint *prp, const wxString &com_name/*,SendToGp
     NMEA0183 oNMEA0183;
     oNMEA0183.TalkerID = _T ( "EC" );
 
-//FIXME     if (dialog && dialog->GetProgressGauge())
-//       dialog->GetProgressGauge()->SetRange(100);
+    // FIXME     if (dialog && dialog->GetProgressGauge())
+    //       dialog->GetProgressGauge()->SetRange(100);
 
     if (g_GPS_Ident == _T("Generic")) {
       if (prp->m_lat < 0.)
@@ -1024,12 +1060,11 @@ int SendWaypointToGPS_N0183(RoutePoint *prp, const wxString &com_name/*,SendToGp
       oNMEA0183.GPwpl.Write(snt);
     }
 
-    auto msg_out = std::make_shared<Nmea0183Msg>(std::string("ECWPL"),
-                                             snt.Sentence.ToStdString(),
-                                             address);
+    auto msg_out = std::make_shared<Nmea0183Msg>(
+        std::string("ECWPL"), snt.Sentence.ToStdString(), address);
     drv_n0183->SendMessage(msg_out, address);
 
-    //LogOutputMessage(snt.Sentence, com_name, false);
+    // LogOutputMessage(snt.Sentence, com_name, false);
 
     wxString msg(_T("-->GPS Port:"));
     msg += com_name;
@@ -1042,8 +1077,8 @@ int SendWaypointToGPS_N0183(RoutePoint *prp, const wxString &com_name/*,SendToGp
       wxString term;
       term.Printf(_T("$PFEC,GPxfr,CTL,E%c%c"), 0x0d, 0x0a);
 
-      //driver->SendSentence(term);
-      //LogOutputMessage(term, dstr->GetPort(), false);
+      // driver->SendSentence(term);
+      // LogOutputMessage(term, dstr->GetPort(), false);
 
       wxString msg(_T("-->GPS Port:"));
       msg += com_name;
@@ -1053,24 +1088,23 @@ int SendWaypointToGPS_N0183(RoutePoint *prp, const wxString &com_name/*,SendToGp
       wxLogMessage(msg);
     }
 
-//     if (dialog && dialog->GetProgressGauge()) {
-//       dialog->GetProgressGauge()->SetValue(100);
-//       dialog->GetProgressGauge()->Refresh();
-//       dialog->GetProgressGauge()->Update();
-//     }
+    //     if (dialog && dialog->GetProgressGauge()) {
+    //       dialog->GetProgressGauge()->SetValue(100);
+    //       dialog->GetProgressGauge()->Refresh();
+    //       dialog->GetProgressGauge()->Update();
+    //     }
 
     wxMilliSleep(500);
 
     //  All finished with the temp port
-    if (btempStream)
-      registry.Deactivate(driver);
+    if (btempStream) registry.Deactivate(driver);
 
     ret_val = 0;
   }
 
 ret_point:
   if (b_restoreStream) {
-    if (old_driver){
+    if (old_driver) {
       MakeCommDriver(&params_save);
     }
   }

@@ -985,6 +985,10 @@ set(
   include/shaders.h
   include/WindowDestroyListener.h
   include/svg_utils.h
+  include/unmanned_vessel_socket.h
+  include/unmanned_vessel_meesage_header.h
+  include/unmanned_vessle_target_data.h
+  include/geography_point.h
 )
 
 set(MODEL_SRC
@@ -1148,6 +1152,10 @@ set(
   src/waypointman_gui.cpp
   src/viewport.cpp
   src/shaders.cpp
+  src/unmanned_vessel_socket.cpp
+  src/unmanned_vessel_meesage_header.cpp
+  src/geography_point.cpp
+  src/unmanned_vessle_target_data.cpp
 )
 
 

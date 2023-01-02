@@ -83,6 +83,8 @@ struct AisDecoderCallbacks {
 
 class AisDecoder : public wxEvtHandler {
 public:
+
+  friend class UnmannedVesselSocket;
   AisDecoder(AisDecoderCallbacks callbacks);
 
   ~AisDecoder(void);

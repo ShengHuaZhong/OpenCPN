@@ -32,4 +32,8 @@ bool StopAndRemoveCommDriver(std::string ident, NavAddr::Bus = NavAddr::Bus::Und
 
 wxString ProcessNMEA4Tags(wxString& msg);
 
+void Int32ToDouble(const int source, double& destination);
+
+void DoubleToInt32(const double source, int& destination);
+
 #endif  // _COMM_UTIL_H
