@@ -989,6 +989,7 @@ set(
   include/unmanned_vessel_meesage_header.h
   include/unmanned_vessle_target_data.h
   include/geography_point.h
+  include/unmanned_control_message.h
 )
 
 set(MODEL_SRC
@@ -1156,6 +1157,7 @@ set(
   src/unmanned_vessel_meesage_header.cpp
   src/geography_point.cpp
   src/unmanned_vessle_target_data.cpp
+  src/unmanned_control_message.cpp
 )
 
 

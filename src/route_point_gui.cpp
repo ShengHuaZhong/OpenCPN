@@ -571,7 +571,7 @@ void RoutePointGui::DrawGL(ViewPort &vp, ChartCanvas *canvas, ocpnDC &dc,
   // Draw radar obstacke if activated
   if (m_point.is_radar_obstacle_waypoint_ && m_point.radar_obstacle_coordinate_.size() > 3) {
     double factor = 1.00;
-    if (m_point.m_iWaypointRangeRingsStepUnits == 1)  // nautical miles
+    //if (m_point.m_iWaypointRangeRingsStepUnits == 1)  // nautical miles
       factor = 1 / 1.852;
     factor *= m_point.m_fWaypointRangeRingsStep;
     // 0.5 mm nominal, but not less than 1 pixel
@@ -588,7 +588,7 @@ void RoutePointGui::DrawGL(ViewPort &vp, ChartCanvas *canvas, ocpnDC &dc,
     for (auto& outline_point : m_point.radar_obstacle_coordinate_) {
       double tlat, tlon;
       wxPoint r1;
-      ll_gc_ll(outline_point.latitude, outline_point.longitude, 0, factor, &tlat, &tlon);
+      ll_gc_ll(outline_point.latitude, outline_point.longitude, 0, 0, &tlat, &tlon);
       canvas->GetCanvasPointPix(tlat, tlon, &r1);
       outline_pix_position.push_back(r1);
     }

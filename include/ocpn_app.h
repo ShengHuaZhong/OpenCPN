@@ -66,7 +66,7 @@ public:
   Track* TrackOff(void);
 
   wxSingleInstanceChecker* m_checker;
-  UnmannedVesselSocket* unmanned_vessel_socket_;
+
   CommBridge m_comm_bridge;
 
   RESTServer m_RESTserver;

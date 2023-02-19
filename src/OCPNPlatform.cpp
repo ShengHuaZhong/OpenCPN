@@ -252,6 +252,8 @@ extern int g_Android_SDK_Version;
 extern wxString g_androidDownloadDirectory;
 extern wxString g_gpx_path;
 
+extern UnmannedVesselSocket* unmanned_vessel_socket_;
+
 #ifdef __ANDROID__
 extern PlatSpec android_plat_spc;
 #endif
@@ -2091,7 +2093,8 @@ bool OCPNPlatform::isPlatformCapable(int flag) {
 void OCPNPlatform::DoHelpDialog(void) {
 #ifndef __OCPN__ANDROID__
   if (!g_pAboutDlg) {
-    g_pAboutDlg = new AboutFrameImpl(gFrame);
+    g_pAboutDlg = new AboutFrameImpl(unmanned_vessel_socket_, gFrame);
+   
   } else {
     g_pAboutDlg->SetFocus();
   }

@@ -11,7 +11,7 @@ struct UnmanedVesselTargetData
   int32_t longtitude;
   int32_t latitude;
   uint16_t velocity;  // m/s *100
-  uint16_t bearing;   // rad *1000
+  int16_t bearing;   // rad *1000
   int32_t other;
 };
 #pragma pack()

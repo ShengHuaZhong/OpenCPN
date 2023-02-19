@@ -37,6 +37,7 @@
 #include <wx/jsonwriter.h>
 #include <wx/tokenzr.h>
 
+
 #include "comm_driver.h"
 #include "comm_drv_factory.h"
 #include "comm_drv_n0183_net.h"
@@ -49,17 +50,18 @@
 #include "route.h"
 #include "NMEALogWindow.h"
 #include "unmanned_vessel_meesage_header.h"
-
+#include "comm_util.h"
 #ifdef USE_GARMINHOST
 #include "garmin_wrapper.h"
 #endif
-
+#include "unmanned_vessel_socket.h"
 extern wxString g_GPS_Ident;
 extern bool g_bGarminHostUpload;
 extern bool g_bWplUsePosition;
 extern wxArrayOfConnPrm *g_pConnectionParams;
 extern int g_maxWPNameLength;
 extern wxString g_TalkerIdText;
+extern UnmannedVesselSocket* unmanned_vessel_socket_;
 
 // FIXME (dave)  think about GUI feedback, disabled herein
 
@@ -307,38 +309,84 @@ int SendRouteToGPS_N0183(Route *pr, const wxString &com_name,
 
   if (com_name.Lower().StartsWith("udp") &&
       com_name.Lower().EndsWith("unmanned_vessel")) {
+
+
     const size_t max_send_buffer_size = 2048;
     char send_buf[max_send_buffer_size]{};
     size_t send_size = 0;
     UnmannedVesselMessageHeader message_header{};
+    message_header.destination_device_id = DevID::DevID_USV_AC;
+    message_header.source_device_id = DevID::DevID_USV_MAP;
+    message_header.message_id = MESSAGE_ID::ROUTE_MESSAGE_ID;
     message_header.flag = 0x5a5a;
     memcpy_s(send_buf + send_size, sizeof(message_header), &message_header,
              sizeof(message_header));
     send_size += sizeof(message_header);
-    uint32_t number_of_route_point = pr->pRoutePointList->size();
+
+    unsigned char number_of_route_point = pr->pRoutePointList->size();
     if (max_send_buffer_size > send_size) {
       memcpy_s(send_buf + send_size, sizeof(number_of_route_point),
                &number_of_route_point, sizeof(number_of_route_point));
       send_size += sizeof(number_of_route_point);
 
+      uint16_t ship_velocity = pr->m_PlannedSpeed;
+      if (max_send_buffer_size > send_size) {
+        memcpy_s(send_buf + send_size, sizeof(ship_velocity), &ship_velocity,
+          sizeof(ship_velocity));
+        send_size += sizeof(ship_velocity);
+      }
+
+      uint16_t arrival_radius = 50;
+      if (max_send_buffer_size > send_size) {
+        memcpy_s(send_buf + send_size, sizeof(arrival_radius), &arrival_radius,
+          sizeof(arrival_radius));
+        send_size += sizeof(arrival_radius);
+      }
+
       // send to unmanned vessel
       auto node = pr->pRoutePointList->GetFirst();
       while (node) {
         auto route_point = node->GetData();
+        
         double longitude = route_point->GetLongitude();
         double latitude = route_point->GetLatitude();
+
+        int32_t encode_longitude = 0;
+        int32_t encode_latitude = 0;
+        DoubleToInt32(longitude, encode_longitude);
+        DoubleToInt32(latitude, encode_latitude);
+
+
         if (max_send_buffer_size > send_size) {
-          memcpy_s(send_buf + send_size, sizeof(longitude), &longitude,
-                   sizeof(longitude));
-          send_size += sizeof(longitude);
+          memcpy_s(send_buf + send_size, sizeof(encode_longitude), &encode_longitude,
+                   sizeof(encode_longitude));
+          send_size += sizeof(encode_longitude);
         }
         if (max_send_buffer_size > send_size) {
-          memcpy_s(send_buf + send_size, sizeof(latitude), &longitude,
-                   sizeof(latitude));
-          send_size += sizeof(latitude);
+          memcpy_s(send_buf + send_size, sizeof(encode_latitude), &encode_latitude,
+                   sizeof(encode_latitude));
+          send_size += sizeof(encode_latitude);
         }
         node = node->GetNext();
       }
+      int32_t blank_value = 0;
+      if (max_send_buffer_size > send_size) {
+        memcpy_s(send_buf + send_size, sizeof(blank_value), &blank_value,
+          sizeof(blank_value));
+        send_size += sizeof(blank_value);
+      }
+
+      unsigned char crc_value = 0;
+      if (max_send_buffer_size > send_size) {
+        memcpy_s(send_buf + send_size, sizeof(crc_value), &crc_value,
+          sizeof(crc_value));
+        send_size += sizeof(crc_value);
+      }
+
+      //重新计算数据报的长度
+      message_header.len = send_size;
+      memcpy_s(send_buf, sizeof(message_header), &message_header,
+        sizeof(message_header));
 
       if (max_send_buffer_size > send_size) {
         auto net_socket = std::dynamic_pointer_cast<CommDriverN0183Net>(driver);
@@ -351,6 +399,7 @@ int SendRouteToGPS_N0183(Route *pr, const wxString &com_name,
         wxLogMessage("Insufficient sending buffer, unable to send route data");
       }
     }
+    unmanned_vessel_socket_->ChangedStatus(CtrlMode_AutoBase);
     return ret_val;
   }
 #if 0

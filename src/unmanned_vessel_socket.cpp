@@ -8,75 +8,31 @@
 #include "unmanned_vessel_meesage_header.h"
 #include "geography_point.h"
 #include "unmanned_vessle_target_data.h"
+#include "unmanned_control_message.h"
 
 #include "comm_util.h"
 enum {
   // id for sockets
   SERVER_ID = 100,
-  SOCKET_ID
+  SOCKET_ID,
+  HeartBeatTimer_ID
 };
-
-enum MESSAGE_ID : uint16_t {
-  OBSTACLE_MESSAGE_ID = 0x0014,
-  TARGET_MESSAGE_ID = 0x0015
-};
-
-//设备标识 每个软件分配一个设备号，
-typedef enum {
-  DevID_USV = 0xa000,      /// 船基站端 开始
-  DevID_USV_CM = 0xa001,   //船基站端监控软件
-  DevID_USV_MAP = 0xa002,  //船基站端海图态势软件
-  DevID_USV_AC = 0xa003,   //船控制端 航行主控软件
-  DevID_USV_BS = 0xa004,   //船控制端 设备管控软件（嵌入式）
-
-  DevID_SHOER = 0xb000,      /// 岸基端 开始
-  DevID_SHOER_CM = 0xb001,   /// 岸基端 监控软件
-  DevID_SHOER_MAP = 0xb002,  /// 岸基端 海图态势软件
-
-  DevID_OCC = 0xc000,      /// 指控中心端  开始
-  DevID_OCC_CM = 0xc001,   /// 指控中心端 监控软件
-  DevID_OCC_MAP = 0xc002,  /// 指控中心端 海图态势软件
-
-} DevID;
+extern double vLat, vLon, gLat, gLon, gHdt;
 
 wxBEGIN_EVENT_TABLE(UnmannedVesselSocket, wxEvtHandler)
     EVT_SOCKET(SOCKET_ID, UnmannedVesselSocket::OnUDPReciveEvent)
-        wxEND_EVENT_TABLE()
+    EVT_TIMER(HeartBeatTimer_ID, UnmannedVesselSocket::OnHeartBeatTimerEvent)
+wxEND_EVENT_TABLE()
 
             extern WayPointman* pWayPointMan;
 extern AisDecoder* g_pAIS;
 
 UnmannedVesselSocket::UnmannedVesselSocket() : obstacle_points_() {
-  listen_address_.Hostname("10.201.222.145");
+  memset(&control_message_, 0, sizeof(control_message_));
+  control_message_.data = CONTROL_MODE::CtrlMode_Hold;
+  listen_address_.Hostname("192.168.1.153");
   listen_address_.Service(29000);
   socket_ = new wxDatagramSocket(listen_address_);
-
-
-  double longitude = 18.299;
-  double latitude = -69.998;
-  auto target_id = 12;
-
-  char longitude_direction = 'N';
-  char latitude_direction = 'S';
-
-  latitude = std::abs(latitude);
-  longitude = std::abs(latitude);
-
-  auto longitude_minute = (longitude - static_cast<int>(longitude)) * 60;
-  auto longitude_second = (longitude_minute - static_cast<int>(longitude_minute)) * 60;
-
-  auto latitude_minute = (latitude - static_cast<int>(latitude)) * 60;
-  auto latitude_second = (latitude_minute - static_cast<int>(latitude_minute)) * 60;
-  int hh = 12;
-  int mm = 58;
-  double ss = 27.21;
-  auto TLL_SENTENCE = wxString::Format(
-      "$RATLL,%02d,%02d%02d.%03d,%c,%03d%02d.%03d,%c,%s,%02d%02d%f,T,*%d\r\n", target_id,
-      static_cast<int>(latitude), static_cast<int>(latitude_minute),
-      static_cast<int>(latitude_second), latitude_direction,
-      static_cast<int>(longitude), static_cast<int>(longitude_minute),
-      static_cast<int>(longitude_second), longitude_direction,
-      wxString::Format("%s_%d", "target", target_id), hh, mm, ss, 22);
 
   if (socket_ == nullptr) {
     wxLogMessage(_T("UnmannedVesselSocket:: socket initialzation failed"));
@@ -89,6 +45,9 @@ UnmannedVesselSocket::UnmannedVesselSocket() : obstacle_points_() {
     socket_->SetNotify(wxSOCKET_INPUT_FLAG | wxSOCKET_LOST_FLAG);
     socket_->Notify(true);
   }
+  heart_beat_timer.Start(1000, false);
+  heart_beat_timer.SetOwner(this, HeartBeatTimer_ID);
+  
 }
 
 UnmannedVesselSocket::~UnmannedVesselSocket() {
@@ -97,17 +56,28 @@ UnmannedVesselSocket::~UnmannedVesselSocket() {
   socket_ = nullptr;
 }
 
+void UnmannedVesselSocket::ChangedStatus(CONTROL_MODE val) {
+  control_ = val;
+}
+
 void UnmannedVesselSocket::OnUDPReciveEvent(wxSocketEvent& event) {
+#if _DEBUG
+
+#endif  // _DEBUG
+
   wxLogMessage(_T("begin UnmannedVesselSocket::OnUDPReciveEvent"));
 
   auto socket = event.GetSocket();
+
   if (socket == nullptr) {
     wxLogMessage(_T("UnmannedVesselSocket:: event::GetSocket() nullptr"));
     return;
   }
   wxIPV4address addr{};
-  char buf[1024]{};
-  auto read_size = socket->Read(buf, sizeof(buf)).LastCount();
+  std::vector<char> buffer{};
+  buffer.resize(4096,0);
+  auto buf = &buffer[0];
+  auto read_size = socket->Read(buf, buffer.size()).LastCount();
   if (!read_size) {
     wxLogMessage("ERROR: failed to receive data");
     return;
@@ -135,6 +105,25 @@ void UnmannedVesselSocket::OnUDPReciveEvent(wxSocketEvent& event) {
     ProcessObstacle(data_buffer, data_buffer_size);
   } else if (MESSAGE_ID::TARGET_MESSAGE_ID == message_header.message_id) {
     ProcessAisTaget(data_buffer, data_buffer_size);
+  } else if (MESSAGE_ID::UNMANNED_POSTURE_MESSAGE_ID ==
+             message_header.message_id) {
+    UnmannedPostureMessage posture_message;
+
+    memcpy_s(&posture_message, sizeof(posture_message), buf,
+             sizeof(posture_message));
+    wxLogMessage(_T("end UnmannedVesselSocket::UNMANNED_POSTURE_MESSAGE_ID"));
+    auto tmp_hdt = posture_message.yaw / 1000.0 * 180 / 3.1415926;
+    gHdt = tmp_hdt;
+    if (std::abs(gHdt) < 2) {
+      wxLogMessage(_T("yaw less = %d "), posture_message.yaw);
+    }
+    Int32ToDouble(posture_message.lat, gLat);
+    Int32ToDouble(posture_message.lon, gLon);
+   
+  } else if (MESSAGE_ID::HEART_BEAT_MESSAGE_ID == message_header.message_id) {
+    if (DevID::DevID_USV_BS == message_header.source_device_id &&
+        DevID::DevID_USV_MAP == message_header.destination_device_id)
+      ProcessMainControl(data_buffer, data_buffer_size);
   }
 
   if (DevID::DevID_OCC_MAP == message_header.destination_device_id ||
@@ -166,44 +155,30 @@ void UnmannedVesselSocket::ProcessAisTaget(const char* buffer,
       targets.push_back(new_target_data);
     }
   }
-
+  int id = 0;
+  
   for (auto target_data : targets) {
-
     double longitude = 0;
     double latitude = 0;
 
     Int32ToDouble(target_data->longtitude, longitude);
     Int32ToDouble(target_data->latitude, latitude);
 
-    char longitude_direction;
-    char latitude_direction;
-
-    auto longitude_minute = (longitude - static_cast<int>(longitude))*60;
-    auto longitude_second = (longitude_minute - static_cast<int>(longitude_minute)) * 60;
-
-    auto latitude_minute = (latitude - static_cast<int>(latitude)) * 60;
-    auto latitude_second = (latitude_minute - static_cast<int>(latitude_minute)) * 60;
-    int hh = 12;
-    int mm = 58;
-    double ss = 27.21;
-    wxString::Format(
-        "$RATLL,%2d,%2d%d.%3d,%c,%3d%2d.%3d,%c,%s,%2d%2d%f,T,*%d\r\n",
-        target_data->target_id, static_cast<int>(latitude),
-        static_cast<int>(latitude_minute), static_cast<int>(latitude_second),
-        latitude_direction, static_cast<int>(longitude),
-        static_cast<int>(longitude_minute), static_cast<int>(longitude_second),
-        longitude_direction,
-        wxString::Format("%s_%d", "target", target_data->target_id), hh, mm, ss,
-        22);
+    auto new_ais_target = AisTargetDataMaker::GetInstance().GetTargetData();
+    new_ais_target->HDG = (target_data->bearing / 1000.0) * 180 / 3.1415926;
+    new_ais_target->Lon = longitude;
+    new_ais_target->Lat = latitude;
+    new_ais_target->SOG = target_data->velocity / 100.0 / 1852;
+    new_ais_target->b_positionOnceValid = true;
+    new_ais_target->MMSI = id;
+    id++;
+    auto obstacle_name =
+      wxString::Format(wxT("Dynamic_%d"), id);
+    const char* ship_name = obstacle_name;
+    memcpy_s(new_ais_target->ShipName, sizeof(new_ais_target->ShipName),
+      ship_name, strnlen_s(ship_name, sizeof(new_ais_target->ShipName)));
+    g_pAIS->CommitAISTarget(new_ais_target, "", true, true);
   }
-
-  auto new_ais_target = AisTargetDataMaker::GetInstance().GetTargetData();
-
-  new_ais_target->Lon = -109.806;
-  new_ais_target->Lat = -88.4;
-  const char* ship_name = "HELLO WORLD";
-  memcpy_s(new_ais_target->ShipName, sizeof(new_ais_target->ShipName),
-           ship_name, strnlen_s(ship_name, sizeof(new_ais_target->ShipName)));
 }
 
 void UnmannedVesselSocket::ProcessObstacle(const char* buf, int read_size) {
@@ -279,10 +254,19 @@ void UnmannedVesselSocket::ProcessObstacle(const char* buf, int read_size) {
       } else {
         return;
       }
-
       longtitude = -((double)encode_longtitude / double(1 << 31)) * 180.0;
       latitude = -((double)encode_latitude / double(1 << 31)) * 180.0;
       obstacle_outline_point.push_back({longtitude, latitude});
+    }
+    // 读取预留值
+    int32_t other = 0;
+    if (read_size > processed_size) {
+      memcpy_s(&other, sizeof(other),
+        buf + processed_size, sizeof(other));
+      processed_size += sizeof(other);
+    }
+    else {
+      return;
     }
     if (obstacle_outline_point.size() > 1) {
       auto obstacle_name =
@@ -298,8 +282,59 @@ void UnmannedVesselSocket::ProcessObstacle(const char* buf, int read_size) {
       for (auto& point : obstacle_outline_point) {
         radar_obstacle->AddObstacleOutlinePoint(point);
       }
-      pWayPointMan->AddRoutePoint(radar_obstacle);
-      obstacle_points_.push_back(radar_obstacle);
+      radar_obstacle->AddObstacleOutlinePoint(obstacle_outline_point[0]);
+      if (pWayPointMan != nullptr) {
+        pWayPointMan->AddRoutePoint(radar_obstacle);
+        obstacle_points_.push_back(radar_obstacle);
+      }
     }
   }
+}
+
+void UnmannedVesselSocket::SendTo(const wxIPV4address& address, const char* buffer, int buffer_size) {
+
+  auto send_size = socket_
+    ->SendTo(address, buffer,
+      buffer_size)
+    .LastWriteCount();
+}
+
+void UnmannedVesselSocket::OnHeartBeatTimerEvent(wxTimerEvent& event) {
+
+
+  control_message_.message_header.flag = 0x5a5a;
+  control_message_.message_header.message_id = MESSAGE_ID::HEART_BEAT_MESSAGE_ID;
+  control_message_.message_header.source_device_id = DevID::DevID_USV_MAP;
+  control_message_.message_header.destination_device_id = DevID::DevID_USV_BS;
+  control_message_.message_header.len = sizeof(control_message_);
+
+  wxIPV4address main_control_address;
+  main_control_address.Hostname("192.168.1.161");
+  main_control_address.Service(29003);
+
+  auto send_size = socket_
+    ->SendTo(main_control_address, &control_message_,
+      sizeof(control_message_))
+    .LastWriteCount();
+}
+
+void UnmannedVesselSocket::ProcessMainControl(const char* buffer,
+                                              int buffer_size) {
+  UnmannedControlMessage control_message;
+  memset(&control_message, 0, sizeof(control_message));
+  control_message.message_header.flag = 0x5a5a;
+  control_message.message_header.message_id = MESSAGE_ID::HEART_BEAT_MESSAGE_ID;
+  control_message.message_header.source_device_id = DevID::DevID_USV_MAP;
+  control_message.message_header.destination_device_id = DevID::DevID_USV_BS;
+  control_message.message_header.len = sizeof(control_message);
+  memcpy_s(&control_message.data, sizeof(control_message.data), buffer, sizeof(control_message.data));
+
+  wxIPV4address main_control_address;
+  main_control_address.Hostname("192.168.1.150");
+  main_control_address.Service(29002);
+
+  auto send_size = socket_
+                       ->SendTo(main_control_address, &control_message,
+                                sizeof(control_message))
+                       .LastWriteCount();
 }

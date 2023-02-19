@@ -80,7 +80,7 @@
 #include <wx/stdpaths.h>
 #include <wx/tokenzr.h>
 #include <wx/cmdline.h>
-
+#include <mutex>
 #include "ocpn_app.h"
 #include "ocpn_frame.h"
 
@@ -134,6 +134,7 @@
 #include "comm_bridge.h"
 #include "certificates.h"
 #include "mDNS_query.h"
+#include "unmanned_control_message.h"
 #include "unmanned_vessel_socket.h"
 //#include "usb_devices.h"
 //#include "comm_drv_registry.h"
@@ -437,6 +438,7 @@ S57ClassRegistrar *g_poRegistrar;
 s57RegistrarMgr *m_pRegistrarMan;
 
 CM93OffsetDialog *g_pCM93OffsetDialog;
+UnmannedVesselSocket* unmanned_vessel_socket_;
 
 #ifdef __WXOSX__
 #include "macutils.h"
@@ -798,6 +800,12 @@ wxString g_lastAppliedTemplateGUID;
 
 ChartCanvas *g_focusCanvas;
 ChartCanvas *g_overlayCanvas;
+
+
+std::mutex fix_gyration_message_mutex;
+FixGyrationMessage fix_gyration_message;
+std::mutex fix_point_message_mutex;
+FixPointMessage fix_point_message;
 
 bool b_inCloseWindow;
 
@@ -2070,7 +2078,6 @@ bool MyApp::OnInit() {
   if (unmanned_vessel_socket_ == nullptr) {
     wxLogMessage(_T("opencpn::MyApp initilization failed for unmanned vessel socket"));
   }
-
   return TRUE;
 }
 
